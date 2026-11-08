@@ -6,7 +6,6 @@
       "memory": 1024
     }
   },
-  "regions": ["sin1"],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.py" },
     { "source": "/(.*)", "destination": "/public/$1" }
