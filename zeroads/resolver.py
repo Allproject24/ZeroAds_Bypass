@@ -164,7 +164,7 @@ def resolve(slug):
                 allow_redirects=True,
             )
         landed.close()
-        referer = f"{TARGET_HOST}/"
+        referer = landed.headers.get("X-Real-Url", landed.url)
     except Exception as error:
         _log_timing("landing", landing_started, host="app.khaddavi.net", error=error)
         raise
