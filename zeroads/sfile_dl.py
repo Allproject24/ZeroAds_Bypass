@@ -218,6 +218,7 @@ class Client:
         self.trace = []           # riwayat halaman (untuk debug)
         self.steps = []
         self.notes = []
+        self.need_human = False
 
     def open(self, url, referer=None, data=None, range_start=0):
         self.requests += 1
@@ -689,11 +690,6 @@ def find_candidates(text, page_url, gw=False):
     cands = [{"url": k[0], "data": k[1], "score": v[0], "why": v[1], "fallback": v[2]}
              for k, v in found.items()]
     cands.sort(key=lambda c: (c["fallback"], -c["score"]))
-        # FIX-14: STOP! Cloudflare Turnstile = butuh manusia, jangan dipaksa crawl
-    low = text.lower()
-    if 'cloudflare' in low and ("i'm a human" in low or 'turnstile' in low or 'melakukan verifikasi' in low):
-        print('[SFILE] STOP: Cloudflare Turnstile terdeteksi, butuh verifikasi manual')
-        return [{"url": page_url, "data": None, "score": 999, "why": "need_human_verification", "fallback": False}]
     # DEBUG FIX-10
     try:
         import re as _r2
@@ -817,6 +813,9 @@ def resolve(client, url, referer, args, seen, depth=0, data=None):
         note = f"captcha / pemeriksaan Cloudflare terdeteksi di {short(page_url, 70)} (tidak bisa dilewati skrip)"
         if note not in client.notes:
             client.notes.append(note)
+        client.need_human = True
+        print('[SFILE] STOP: Cloudflare Turnstile terdeteksi, butuh verifikasi manual', flush=True)
+        return None
 
     if depth >= max_depth:
         return None

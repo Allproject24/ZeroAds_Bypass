@@ -60,15 +60,18 @@ def downloads():
         download_lock.release()
         return jsonify(error=str(error)), 400
     except DownloadFailure as error:
+        _status = getattr(error, "code", None) or ("blocked" if error.manual_url else "failed")
+        if _status == "need_human_verification":
+            _status = "need_human"
         _log_timing(
             "api_resolve",
             resolution_started,
-            "blocked" if error.manual_url else "failed",
+            _status,
         )
         download_lock.release()
         return (
             jsonify(
-                status="blocked" if error.manual_url else "failed",
+                status=_status,
                 error=str(error),
                 manualUrl=error.manual_url,
             ),

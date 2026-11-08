@@ -19,9 +19,10 @@ class UnsupportedUrl(ValueError):
 
 
 class DownloadFailure(RuntimeError):
-    def __init__(self, message, manual_url=None):
+    def __init__(self, message, manual_url=None, code=None):
         super().__init__(message)
         self.manual_url = manual_url
+        self.code = code
 
 
 def _log_timing(stage, started, outcome, requests=None):
@@ -93,6 +94,8 @@ def resolve_download(value):
     )
     if not found:
         fallback = client.goal_page or manual_url
+        if getattr(client, "need_human", False):
+            raise DownloadFailure("Tautan ini butuh verifikasi manusia (Cloudflare). Lanjutkan sendiri di browser.", fallback, code="need_human_verification")
         message = (
             "Tautan asli Safefileku ditemukan. Lanjutkan sendiri di browser."
             if fallback
