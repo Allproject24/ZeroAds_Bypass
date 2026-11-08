@@ -689,7 +689,22 @@ def find_candidates(text, page_url, gw=False):
     cands = [{"url": k[0], "data": k[1], "score": v[0], "why": v[1], "fallback": v[2]}
              for k, v in found.items()]
     cands.sort(key=lambda c: (c["fallback"], -c["score"]))
-    # DEBUG FIX-9: liat kenapa not_found padahal halaman dapet
+    # DEBUG FIX-10
+try:
+    import re as _re
+    low_html = text.lower()
+    print('[DEBUG-HTML] has_form=' + str('<form' in low_html) + ' has_button=' + str('<button' in low_html))
+    import re as _r2
+    forms_found = list(_r2.finditer(r'<form[^>]*>', text, _r2.I))
+    print('[DEBUG-HTML] forms_count=' + str(len(forms_found)))
+    [print('[DEBUG-HTML] FORM: ' + m.group(0)[:400]) for m in forms_found[:3]]
+    btns = list(_r2.finditer(r'<button[^>]*>.*?</button>', text, _r2.I|_r2.S))
+    print('[DEBUG-HTML] buttons_count=' + str(len(btns)))
+    [print('[DEBUG-HTML] BUTTON: ' + m.group(0)[:400]) for m in btns[:5]]
+    ctx = list(_r2.finditer(r'.{0,80}download.{0,80}', text, _r2.I|_r2.S))
+    [print('[DEBUG-HTML] CTX: ' + m.group(0).replace(chr(10),' ')[:300]) for m in ctx[:2]]
+except Exception as e:
+    print('[DEBUG-HTML] err ' + str(e)) padahal halaman dapet
     try:
         print(f"[DEBUG-SFILE] forms={len(forms) if 'forms' in locals() else '?'} cands={len(cands)}")
         for u, s, kind in cands[:10]:
