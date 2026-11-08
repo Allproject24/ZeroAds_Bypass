@@ -95,7 +95,7 @@ def resolve_download(value):
     if not found:
         fallback = client.goal_page or manual_url
         if getattr(client, "need_human", False):
-            raise DownloadFailure("Tautan ini butuh verifikasi manusia (Cloudflare). Lanjutkan sendiri di browser.", fallback, code="need_human_verification")
+            raise DownloadFailure("Tautan ini butuh verifikasi manusia (Turnstile / I am a Human). Lanjutkan sendiri di browser.", fallback, code="need_human_verification")
         message = (
             "Tautan asli Safefileku ditemukan. Lanjutkan sendiri di browser."
             if fallback

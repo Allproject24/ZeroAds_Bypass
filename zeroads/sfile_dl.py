@@ -107,6 +107,8 @@ CAPTCHA_RE = re.compile(
     r"recaptcha/(?:api|enterprise)|Just a moment\.\.\.|cf-browser-verification|"
     r"challenge-platform|__CF\$cv\$params|name=[\"']ray_id[\"']", re.I)
 
+HUMAN_GATE_RE = re.compile(r"I am a Human|verify you are human|verifikasi.*manusia", re.I)
+
 JS_NAV = re.compile(
     r"""(?:location(?:\.href|\.replace|\.assign)?\s*(?:=|\()|\.href\s*=)\s*["']([^"'\s<>]+)["']""", re.I)
 JS_OPEN = re.compile(r"""window\.open\s*\(\s*["']([^"'\s<>]+)["']""", re.I)
@@ -809,12 +811,12 @@ def resolve(client, url, referer, args, seen, depth=0, data=None):
         client.goal_page = page_url
         log(f"{pad}  ✓ sampai di halaman file: {short(page_url)}")
     gw = client.gateway and kind != "file"
-    if gw and CAPTCHA_RE.search(text):
+    if gw and (CAPTCHA_RE.search(text) or HUMAN_GATE_RE.search(text)):
         note = f"captcha / pemeriksaan Cloudflare terdeteksi di {short(page_url, 70)} (tidak bisa dilewati skrip)"
         if note not in client.notes:
             client.notes.append(note)
         client.need_human = True
-        print('[SFILE] STOP: Cloudflare Turnstile terdeteksi, butuh verifikasi manual', flush=True)
+        print('[SFILE] STOP: verifikasi manusia terdeteksi, butuh browser user', flush=True)
         return None
 
     if depth >= max_depth:
