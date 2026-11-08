@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050505" />
+    <title>ZeroAds Downloader</title>
+    <meta name="description" content="Bypass tautan pendek yang didukung dan unduh file hasilnya." />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="ZeroAds Downloader" />
+    <meta property="og:description" content="Bypass tautan pendek yang didukung dan unduh file hasilnya." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ZeroAds Downloader" />
+    <meta name="twitter:description" content="Bypass tautan pendek yang didukung dan unduh file hasilnya." />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="app-shell">
+        <main class="main-content">
+          <section class="downloader-card" aria-labelledby="page-title">
+            <div class="card-brand" data-testid="header-brand">
+              <div class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 120 120" width="60" height="60" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="ghost-body" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#ffffff"></stop>
+                      <stop offset="1" stop-color="#cfd0d4"></stop>
+                    </linearGradient>
+                  </defs>
+                  <g transform="translate(60 57) scale(1.16) translate(-60 -59)">
+                    <path d="M34 60C34 38 45 24 60 24S86 38 86 60V90Q80.8 98 75.6 90T65.2 90T54.8 90T44.4 90T34 90Z" fill="url(#ghost-body)"></path>
+                    <g fill="#0b0b0c">
+                      <circle cx="51" cy="48" r="5.4"></circle>
+                      <circle cx="69" cy="48" r="5.4"></circle>
+                    </g>
+                    <g fill="#ffffff">
+                      <circle cx="52.9" cy="46" r="1.9"></circle>
+                      <circle cx="70.9" cy="46" r="1.9"></circle>
+                    </g>
+                    <path d="M57 55.4q3 3.4 6 0" fill="none" stroke="#0b0b0c" stroke-width="1.7" stroke-linecap="round"></path>
+                    <circle cx="60" cy="76" r="12.5" fill="#141416" stroke="#e9e9ec" stroke-width="1.4"></circle>
+                    <path transform="translate(52.85 68.2) scale(0.65)" d="M8 17l4 4 4-4M12 12v9M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="M36 66Q36 80 50 80M84 66Q84 80 70 80" fill="none" stroke="#b9bac0" stroke-width="8.6" stroke-linecap="round"></path>
+                    <path d="M36 66Q36 80 50 80M84 66Q84 80 70 80" fill="none" stroke="#f6f6f8" stroke-width="7" stroke-linecap="round"></path>
+                  </g>
+                </svg>
+              </div>
+              <h1 id="page-title" class="card-title" data-testid="text-page-title">ZeroAds Downloader</h1>
+              <p class="card-subtitle">BYPASS SEMUA SHORT LINK</p>
+              <p class="card-description">
+                Bypass <strong>sfl.gl</strong> · <strong>sfile.co</strong> · <strong>sfile.mobi</strong> · <strong>SafelinkU</strong> · <strong>Safefileku</strong><span class="card-description-tail">, dan lain-lain.</span>
+              </p>
+            </div>
+
+            <form class="download-form" id="download-form" novalidate>
+              <label class="screen-reader" for="sfile-url">Tautan Sfile</label>
+              <div class="url-input-wrap">
+                <svg class="url-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 17H7A5 5 0 0 1 7 7h2"></path>
+                  <path d="M15 7h2a5 5 0 1 1 0 10h-2"></path>
+                  <line x1="8" x2="16" y1="12" y2="12"></line>
+                </svg>
+                <input
+                  id="sfile-url"
+                  class="url-input"
+                  data-testid="input-sfile-url"
+                  type="url"
+                  inputmode="url"
+                  autocomplete="url"
+                  maxlength="2048"
+                  placeholder="Tempel link shortlink di sini"
+                  aria-describedby="url-error"
+                />
+                <button
+                  class="clear-url-button"
+                  data-testid="button-clear-url"
+                  type="button"
+                  aria-label="Hapus URL"
+                  title="Hapus URL"
+                  hidden
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              <button class="submit-button" data-testid="button-start-download" type="submit">
+                <span>Bypass</span>
+              </button>
+              <p class="input-error" id="url-error" data-testid="text-url-error" hidden></p>
+              <div class="error-callout" id="start-error" role="alert" data-testid="alert-start-error" hidden></div>
+            </form>
+
+            <section class="job-panel" id="job-panel" aria-live="polite" data-testid="panel-job-status" hidden></section>
+
+            <div class="service-tags" aria-label="Keunggulan layanan">
+              <span>Bypass Iklan</span>
+              <span>Bebas Shortlink</span>
+              <span>Cepat &amp; Mudah</span>
+              <span>Support All Device</span>
+            </div>
+
+            <div class="card-divider" aria-hidden="true"></div>
+            <div class="card-footer">© 2026 ZeroAds Downloader</div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
