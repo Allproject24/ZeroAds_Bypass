@@ -38,8 +38,10 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
         pass
 
 def get_xsrf(session, domain):
+    # Karena request lewat Cloudflare Worker, domain cookie berubah.
+    # Kita cukup mencari nama cookie-nya saja.
     for cookie in session.cookies:
-        if cookie.name == "XSRF-TOKEN" and domain in cookie.domain:
+        if cookie.name == "XSRF-TOKEN":
             return unquote(cookie.value)
     return ""
 
