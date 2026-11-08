@@ -40,7 +40,7 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
 def get_xsrf(session, domain):
     for cookie in session.cookies:
         if cookie.name == "XSRF-TOKEN":
-            return cookie.value
+            return unquote(cookie.value)
     return ""
 
 TARGET_RE = re.compile(r"https://safefileku\.com/download/[A-Za-z0-9_-]+")
