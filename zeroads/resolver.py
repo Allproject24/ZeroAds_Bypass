@@ -38,11 +38,9 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
         pass
 
 def get_xsrf(session, domain):
-    # Karena request lewat Cloudflare Worker, domain cookie berubah.
-    # Kita cukup mencari nama cookie-nya saja.
     for cookie in session.cookies:
         if cookie.name == "XSRF-TOKEN":
-            return unquote(cookie.value)
+            return cookie.value
     return ""
 
 TARGET_RE = re.compile(r"https://safefileku\.com/download/[A-Za-z0-9_-]+")
@@ -166,7 +164,7 @@ def resolve(slug):
                 allow_redirects=True,
             )
         landed.close()
-        referer = landed.headers.get("X-Real-Url", landed.url)
+        referer = f"{TARGET_HOST}/"
     except Exception as error:
         _log_timing("landing", landing_started, host="app.khaddavi.net", error=error)
         raise
@@ -178,6 +176,7 @@ def resolve(slug):
     xsrf = get_xsrf(session, "khaddavi")
     if not xsrf:
         raise ValueError("no XSRF-TOKEN for app.khaddavi.net")
+    _log_timing("xsrf_check", time.perf_counter(), host="app.khaddavi.net", status=200, length=len(xsrf))
 
     api_headers = {
         "Content-Type": "application/json",
