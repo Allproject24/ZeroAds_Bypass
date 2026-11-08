@@ -689,7 +689,12 @@ def find_candidates(text, page_url, gw=False):
     cands = [{"url": k[0], "data": k[1], "score": v[0], "why": v[1], "fallback": v[2]}
              for k, v in found.items()]
     cands.sort(key=lambda c: (c["fallback"], -c["score"]))
-        # DEBUG FIX-10
+        # FIX-14: STOP! Cloudflare Turnstile = butuh manusia, jangan dipaksa crawl
+    low = text.lower()
+    if 'cloudflare' in low and ("i'm a human" in low or 'turnstile' in low or 'melakukan verifikasi' in low):
+        print('[SFILE] STOP: Cloudflare Turnstile terdeteksi, butuh verifikasi manual')
+        return [{"url": page_url, "data": None, "score": 999, "why": "need_human_verification", "fallback": False}]
+    # DEBUG FIX-10
     try:
         import re as _r2
         low_html = text.lower()
