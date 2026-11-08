@@ -176,7 +176,6 @@ def resolve(slug):
     xsrf = get_xsrf(session, "khaddavi")
     if not xsrf:
         raise ValueError("no XSRF-TOKEN for app.khaddavi.net")
-    _log_timing("xsrf_check", time.perf_counter(), host="app.khaddavi.net", status=200, length=len(xsrf))
 
     api_headers = {
         "Content-Type": "application/json",
