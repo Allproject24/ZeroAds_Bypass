@@ -1,7 +1,7 @@
 import random
 import re
 import time
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit, quote
 
 import requests
 from bs4 import BeautifulSoup
@@ -11,7 +11,11 @@ USER_AGENT = (
     "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
 )
+WORKER_URL = "https://sfl-proxy.allstorevpn.workers.dev"
 
+def proxify(url):
+    """Bungkus URL agar lewat Cloudflare Worker"""
+    return f"{WORKER_URL}?url={quote(url, safe='')}"
 
 def _log_timing(stage, started, response=None, host=None, error=None, attempt=None):
     response_url = getattr(response, "url", "") if response is not None else ""
@@ -31,8 +35,7 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
     try:
         print(" ".join(fields), flush=True)
     except Exception:
-        pass  # log tidak boleh menggagalkan permintaan atau menahan kunci unduhan
-
+        pass
 
 def get_xsrf(session, domain):
     for cookie in session.cookies:
@@ -40,13 +43,9 @@ def get_xsrf(session, domain):
             return unquote(cookie.value)
     return ""
 
-
 TARGET_RE = re.compile(r"https://safefileku\.com/download/[A-Za-z0-9_-]+")
 
-
 def is_target(url):
-    """True hanya untuk https://safefileku.com/download/<id> — persis sama dengan
-    validasi frontend getManualUrl (https, tanpa subdomain, path /download/<id>)."""
     try:
         parts = urlsplit(url)
         host = (parts.hostname or "").lower()
@@ -63,11 +62,7 @@ def is_target(url):
     rest = parts.path[len("/download/"):].rstrip("/")
     return bool(rest) and all(c.isalnum() or c in "_-" for c in rest)
 
-
 def extract_destination(html, base=""):
-    """Cari link tujuan di halaman. Link safefileku diutamakan di mana pun posisinya; redirect lain
-    (window.location / meta refresh) hanya jadi cadangan, supaya redirect pertama yang tidak relevan
-    tidak menutupi link tujuan yang ada di halaman yang sama."""
     candidates = []
     for match in re.finditer(r'window\.location\.href\s*=\s*["\']([^"\']+)["\']', html):
         candidates.append(match.group(1).replace("\\/", "/"))
@@ -82,27 +77,29 @@ def extract_destination(html, base=""):
         return match.group(0)
     return candidates[0] if candidates else None
 
-
 def open_destination(session, url, max_hops=8):
-    """Buka halaman tujuan sambil mengikuti redirect satu per satu. Begitu URL tujuan (safefileku)
-    terlihat, berhenti tanpa mengunduh halamannya: crawler akan membukanya lagi, jadi di sini cukup
-    URL-nya. Return (url_akhir, response_atau_None, teks)."""
     for _ in range(max_hops):
         if is_target(url):
             return url, None, ""
-        response = session.get(url, timeout=30, allow_redirects=False)
-        location = response.headers.get("Location") if response.is_redirect else None
-        if not location:
-            text = response.text
+        
+        response = session.get(proxify(url), timeout=30, allow_redirects=False)
+        
+        real_url = response.headers.get("X-Real-Url", url)
+        real_redirect = response.headers.get("X-Real-Redirect")
+        
+        if real_redirect:
             response.close()
-            return response.url, response, text
+            url = real_redirect
+            continue
+            
+        text = response.text
         response.close()
-        url = urljoin(response.url, location)
-    response = session.get(url, timeout=30, allow_redirects=True)
+        return real_url, response, text
+        
+    response = session.get(proxify(url), timeout=30, allow_redirects=True)
     text = response.text
     response.close()
-    return response.url, response, text
-
+    return url, response, text
 
 def _log_retry(attempt, reason, final=None):
     fields = ["TIMING", "stage=resolver_retry", f"attempt={attempt}", f"reason={reason}"]
@@ -113,7 +110,6 @@ def _log_retry(attempt, reason, final=None):
         print(" ".join(fields), flush=True)
     except Exception:
         pass
-
 
 def resolve(slug):
     session = requests.Session()
@@ -132,7 +128,7 @@ def resolve(slug):
 
     page_started = time.perf_counter()
     try:
-        page = session.get(f"https://sfl.gl/{slug}", timeout=30)
+        page = session.get(proxify(f"https://sfl.gl/{slug}"), timeout=30)
         page_text = page.text
         page.close()
     except Exception as error:
@@ -149,13 +145,13 @@ def resolve(slug):
             match = re.search(r'ray_id["\']?\s*value=["\']([^"\']+)', page_text)
             if match:
                 landed = session.get(
-                    f"{TARGET_HOST}/redirect.php?alias={slug}&ray_id={match.group(1)}",
+                    proxify(f"{TARGET_HOST}/redirect.php?alias={slug}&ray_id={match.group(1)}"),
                     timeout=30,
                     allow_redirects=True,
                 )
             else:
                 landed = session.get(
-                    f"{TARGET_HOST}/redirect.php?alias={slug}",
+                    proxify(f"{TARGET_HOST}/redirect.php?alias={slug}"),
                     timeout=30,
                     allow_redirects=True,
                 )
@@ -167,13 +163,13 @@ def resolve(slug):
                 if field.get("name")
             }
             landed = session.get(
-                action,
+                proxify(action),
                 params=form_data,
                 timeout=30,
                 allow_redirects=True,
             )
         landed.close()
-        referer = landed.url
+        referer = landed.headers.get("X-Real-Url", landed.url)
     except Exception as error:
         _log_timing("landing", landing_started, host="app.khaddavi.net", error=error)
         raise
@@ -198,7 +194,7 @@ def resolve(slug):
     verification_started = time.perf_counter()
     try:
         verification = session.post(
-            f"{TARGET_HOST}/api/verify",
+            proxify(f"{TARGET_HOST}/api/verify"),
             headers=api_headers,
             json={"_a": 0, "captcha": "", "passcode": ""},
             timeout=30,
@@ -215,7 +211,7 @@ def resolve(slug):
         go_started = time.perf_counter()
         try:
             go_response = session.post(
-                f"{TARGET_HOST}/api/go",
+                proxify(f"{TARGET_HOST}/api/go"),
                 headers=api_headers,
                 json={"key": key, "size": size},
                 timeout=30,
