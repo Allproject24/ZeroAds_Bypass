@@ -78,7 +78,7 @@ BAD_DOMAINS = ("facebook.com", "fb.com", "twitter.com", "x.com", "t.me",
                "gstatic.com", "jsdelivr.net", "unpkg.com", "bootstrapcdn.com",
                "fontawesome.com", "jquery.com")
 BAD_PATH = re.compile(
-    r"/(login|register|signup|report|dmca|contact|privacy|terms|about|upload|search|faq|tos|sitemap)(/|$)",
+    r"/(login|register|signup|report|dmca|contact|privacy|terms|about|upload|search|faq|tos|sitemap|payout-rates|payout|abuse|advertise|blog)(/|$)",
     re.I)
 # halaman sampah bawaan WordPress (kategori, tag, oEmbed, feed, dst) - tidak pernah berisi link unduhan
 JUNK_PATH = re.compile(
@@ -562,6 +562,9 @@ def score(url, current, text="", lid="", cls="", gw=False, nav=False):
         s += 60
     if "download" in host:
         s += 30
+    # FIX-8: di halaman file, link tanpa sinyal download = sampah
+    if s == 0:
+        return -1
     return s
 
 
@@ -668,7 +671,10 @@ def find_candidates(text, page_url, gw=False):
             s = score(u, page_url, gw=gw)
             if gw and kind == "nav" and s >= 0 and not static:
                 s += 55
-            add(u, s, "js", fallback=not static)
+            # FIX-8: di halaman file jangan tebak link JS
+            if not gw and s < MIN_SCORE:
+                continue
+            add(u, s, "js", fallback=False)
             if s >= 0:
                 add_embedded(u, "js")
 
