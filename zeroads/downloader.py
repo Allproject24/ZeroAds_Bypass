@@ -18,13 +18,10 @@ class UnsupportedUrl(ValueError):
     pass
 
 
-DESTINATION_RE = __import__("re").compile(r"safefileku\.com/download/[\w-]+", __import__("re").I)
-
 class DownloadFailure(RuntimeError):
-    def __init__(self, message, manual_url=None, code=None):
+    def __init__(self, message, manual_url=None):
         super().__init__(message)
         self.manual_url = manual_url
-        self.code = code
 
 
 def _log_timing(stage, started, outcome, requests=None):
@@ -73,11 +70,12 @@ def resolve_download(value):
         resolver_started = time.perf_counter()
         try:
             manual_url = resolve_sfl(slug)
-            start_url = manual_url
         except Exception as error:
             _log_timing("sfl_resolver", resolver_started, type(error).__name__)
             raise DownloadFailure(str(error)) from error
         _log_timing("sfl_resolver", resolver_started, "success")
+        # sfl.gl = bypass-only: cukup kembalikan link asli, jangan lanjut crawler / unduh berkas
+        raise DownloadFailure("Link asli ditemukan.", manual_url=manual_url)
 
     client = sfile_dl.Client(capture_trace=False, timing=True)
     client.gateway = sfile_dl.host_kind(urlsplit(start_url).hostname) != "file"
@@ -94,15 +92,8 @@ def resolve_download(value):
         "success" if found else "not_found",
         client.requests,
     )
-    # LOGIKA BARU: kalo udah sampe safefileku.com/download/ itu udah TUJUAN, stop di sini
-    _dest = client.goal_page or manual_url or ""
-    if DESTINATION_RE.search(_dest or ""):
-        raise DownloadFailure("File ketemu di Safefileku. Lanjutkan di browser.", _dest, code="need_human_verification")
-
     if not found:
         fallback = client.goal_page or manual_url
-        if getattr(client, "need_human", False):
-            raise DownloadFailure("Tautan ini butuh verifikasi manusia (Turnstile / I am a Human). Lanjutkan sendiri di browser.", fallback, code="need_human_verification")
         message = (
             "Tautan asli Safefileku ditemukan. Lanjutkan sendiri di browser."
             if fallback

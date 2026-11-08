@@ -60,18 +60,15 @@ def downloads():
         download_lock.release()
         return jsonify(error=str(error)), 400
     except DownloadFailure as error:
-        _status = getattr(error, "code", None) or ("blocked" if error.manual_url else "failed")
-        if _status == "need_human_verification":
-            _status = "need_human"
         _log_timing(
             "api_resolve",
             resolution_started,
-            _status,
+            "blocked" if error.manual_url else "failed",
         )
         download_lock.release()
         return (
             jsonify(
-                status=_status,
+                status="blocked" if error.manual_url else "failed",
                 error=str(error),
                 manualUrl=error.manual_url,
             ),
@@ -96,6 +93,7 @@ def downloads():
         "X-Accel-Buffering": "no",
         "X-File-Name": quote(result["file_name"], safe=""),
         "X-File-Size": str(result["file_size"]),
+        "Server-Timing": f"resolve;dur={(time.perf_counter() - resolution_started) * 1000:.0f}",
     }
     if result["file_size"]:
         headers["Content-Length"] = str(result["file_size"])

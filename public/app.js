@@ -8,6 +8,7 @@
   const jobPanel = document.getElementById("job-panel");
 
   let active = false;
+  let phase = "resolve"; // "resolve" = server mencari link, "download" = file sedang diterima
   let startedAt = null;
   let timerId = null;
   let job = null;
@@ -95,15 +96,15 @@
     if (manualUrl) {
       jobPanel.innerHTML = `
         <div class="result-card manual-result" data-testid="text-terminal-guidance">
-          <div class="result-eyebrow">LINK ASLI</div>
+          <div class="result-eyebrow">SUKSES</div>
           <code class="manual-url">${escapeHtml(manualUrl)}</code>
           <div class="result-actions">
             <button class="result-action" data-copy-url type="button">
               ${icon(copyFeedback === "URL disalin" ? "check" : "copy", 15)}
-              ${copyFeedback === "URL disalin" ? "Tersalin" : "Salin URL"}
+              ${copyFeedback === "URL disalin" ? "COPIED" : "COPY"}
             </button>
             <a class="result-action" data-testid="button-manual-safefileku" href="${escapeHtml(manualUrl)}" target="_blank" rel="noopener noreferrer">
-              Buka Link ${icon("external", 14)}
+              OPEN ${icon("external", 14)}
             </a>
           </div>
           ${copyFeedback && copyFeedback !== "URL disalin" ? `<p class="copy-feedback" role="alert">${escapeHtml(copyFeedback)}</p>` : ""}
@@ -125,7 +126,7 @@
     submitButton.setAttribute("aria-busy", String(active));
     if (active) {
       const elapsed = startedAt === null ? 1 : Math.floor((Date.now() - startedAt) / 1000) + 1;
-      submitButton.innerHTML = `${icon("loader", 14, "spin-icon")}<span>Memproses</span><span class="button-timer" data-testid="text-elapsed-time" aria-live="off">${elapsed}s</span>`;
+      submitButton.innerHTML = `${icon("loader", 14, "spin-icon")}<span>${phase === "download" ? "Mengunduh" : "Memproses"}</span><span class="button-timer" data-testid="text-elapsed-time" aria-live="off">${elapsed}s</span>`;
     } else {
       submitButton.innerHTML = "<span>Bypass</span>";
     }
@@ -174,6 +175,7 @@
     downloadError = "";
     copyFeedback = "";
     active = true;
+    phase = "resolve";
     startedAt = Date.now();
     render();
     timerId = window.setInterval(render, 1000);
@@ -185,6 +187,8 @@
         body: JSON.stringify({ url }),
         cache: "no-store",
       });
+      phase = "download"; // header sudah diterima = pencarian link selesai
+      render();
       const contentType = response.headers.get("Content-Type") || "";
       if (contentType.includes("application/json")) {
         const body = await response.json();
@@ -224,6 +228,7 @@
         : "Permintaan tidak dapat dimulai. Silakan coba lagi.";
     } finally {
       active = false;
+      phase = "resolve";
       startedAt = null;
       if (timerId) window.clearInterval(timerId);
       timerId = null;

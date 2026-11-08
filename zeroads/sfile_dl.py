@@ -78,7 +78,7 @@ BAD_DOMAINS = ("facebook.com", "fb.com", "twitter.com", "x.com", "t.me",
                "gstatic.com", "jsdelivr.net", "unpkg.com", "bootstrapcdn.com",
                "fontawesome.com", "jquery.com")
 BAD_PATH = re.compile(
-    r"/(login|register|signup|report|dmca|contact|privacy|terms|about|upload|search|faq|tos|sitemap|payout-rates|payout|abuse|advertise|blog)(/|$)",
+    r"/(login|register|signup|report|dmca|contact|privacy|terms|about|upload|search|faq|tos|sitemap)(/|$)",
     re.I)
 # halaman sampah bawaan WordPress (kategori, tag, oEmbed, feed, dst) - tidak pernah berisi link unduhan
 JUNK_PATH = re.compile(
@@ -106,8 +106,6 @@ CAPTCHA_RE = re.compile(
     r"cf-turnstile|challenges\.cloudflare\.com|g-recaptcha|h-captcha|hcaptcha\.com|"
     r"recaptcha/(?:api|enterprise)|Just a moment\.\.\.|cf-browser-verification|"
     r"challenge-platform|__CF\$cv\$params|name=[\"']ray_id[\"']", re.I)
-
-HUMAN_GATE_RE = re.compile(r"I am a Human|verify you are human|verifikasi.*manusia", re.I)
 
 JS_NAV = re.compile(
     r"""(?:location(?:\.href|\.replace|\.assign)?\s*(?:=|\()|\.href\s*=)\s*["']([^"'\s<>]+)["']""", re.I)
@@ -220,7 +218,6 @@ class Client:
         self.trace = []           # riwayat halaman (untuk debug)
         self.steps = []
         self.notes = []
-        self.need_human = False
 
     def open(self, url, referer=None, data=None, range_start=0):
         self.requests += 1
@@ -565,9 +562,6 @@ def score(url, current, text="", lid="", cls="", gw=False, nav=False):
         s += 60
     if "download" in host:
         s += 30
-    # FIX-8: di halaman file, link tanpa sinyal download = sampah
-    if s == 0:
-        return -1
     return s
 
 
@@ -674,10 +668,7 @@ def find_candidates(text, page_url, gw=False):
             s = score(u, page_url, gw=gw)
             if gw and kind == "nav" and s >= 0 and not static:
                 s += 55
-            # FIX-8: di halaman file jangan tebak link JS
-            if not gw and s < MIN_SCORE:
-                continue
-            add(u, s, "js", fallback=False)
+            add(u, s, "js", fallback=not static)
             if s >= 0:
                 add_embedded(u, "js")
 
@@ -692,24 +683,6 @@ def find_candidates(text, page_url, gw=False):
     cands = [{"url": k[0], "data": k[1], "score": v[0], "why": v[1], "fallback": v[2]}
              for k, v in found.items()]
     cands.sort(key=lambda c: (c["fallback"], -c["score"]))
-    # DEBUG FIX-10
-    try:
-        import re as _r2
-        low_html = text.lower()
-        print('[DEBUG-HTML] has_form=' + str('<form' in low_html) + ' has_button=' + str('<button' in low_html))
-        forms_found = list(_r2.finditer(r'<form[^>]*>', text, _r2.I))
-        print('[DEBUG-HTML] forms_count=' + str(len(forms_found)))
-        for m in forms_found[:3]:
-            print('[DEBUG-HTML] FORM: ' + m.group(0)[:400])
-        btns = list(_r2.finditer(r'<button[^>]*>.*?</button>', text, _r2.I|_r2.S))
-        print('[DEBUG-HTML] buttons_count=' + str(len(btns)))
-        for m in btns[:5]:
-            print('[DEBUG-HTML] BUTTON: ' + m.group(0)[:400])
-        ctx = list(_r2.finditer(r'.{0,80}download.{0,80}', text, _r2.I|_r2.S))
-        for m in ctx[:2]:
-            print('[DEBUG-HTML] CTX: ' + m.group(0).replace(chr(10),' ')[:300])
-    except Exception as e:
-        print('[DEBUG-HTML] err ' + str(e))
     return cands
 
 
@@ -811,13 +784,10 @@ def resolve(client, url, referer, args, seen, depth=0, data=None):
         client.goal_page = page_url
         log(f"{pad}  ✓ sampai di halaman file: {short(page_url)}")
     gw = client.gateway and kind != "file"
-    if gw and (CAPTCHA_RE.search(text) or HUMAN_GATE_RE.search(text)):
+    if gw and CAPTCHA_RE.search(text):
         note = f"captcha / pemeriksaan Cloudflare terdeteksi di {short(page_url, 70)} (tidak bisa dilewati skrip)"
         if note not in client.notes:
             client.notes.append(note)
-        client.need_human = True
-        print('[SFILE] STOP: verifikasi manusia terdeteksi, butuh browser user', flush=True)
-        return None
 
     if depth >= max_depth:
         return None
@@ -833,7 +803,7 @@ def resolve(client, url, referer, args, seen, depth=0, data=None):
     top = GW_TOP_PER_PAGE if gw else TOP_PER_PAGE
     max_guess = GW_MAX_GUESSES if gw else MAX_GUESSES
     tried = guessed = 0
-    first = True
+    waited_here = False
     for c in cands:
         key = (c["url"], c["data"])
         if key in seen:
@@ -848,14 +818,17 @@ def resolve(client, url, referer, args, seen, depth=0, data=None):
             if tried > top:
                 continue
         seen.add(key)
-        pause = args.wait if gw else 0.0
-        if first and gw:
+        # Hop langsung ke host file (safefileku/sfile) tidak diberi jeda maupun hitung mundur: link tujuan
+        # sudah ada, tidak ada yang perlu ditunggu. Jeda tetap dipakai sebelum hop non-tujuan.
+        to_goal = host_kind(urllib.parse.urlsplit(c["url"]).hostname) == "file"
+        pause = 0.0 if (to_goal or not gw) else args.wait
+        if gw and not to_goal and not waited_here:
+            waited_here = True
             w = min(detect_wait(text), args.maxwait, max(0.0, MAX_WAIT_TOTAL - client.waited))
             if w > pause:
                 log(f"{pad}  menunggu hitung mundur ±{w:.0f} dtk…")
                 client.waited += w
                 pause = w
-        first = False
         time.sleep(pause)
         found = resolve(client, c["url"], page_url, args, seen, depth + 1, c["data"])
         if found:

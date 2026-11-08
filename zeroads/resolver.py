@@ -41,18 +41,78 @@ def get_xsrf(session, domain):
     return ""
 
 
-def extract_destination(html):
-    match = re.search(r'window\.location\.href\s*=\s*["\']([^"\']+)["\']', html)
+TARGET_RE = re.compile(r"https://safefileku\.com/download/[A-Za-z0-9_-]+")
+
+
+def is_target(url):
+    """True hanya untuk https://safefileku.com/download/<id> — persis sama dengan
+    validasi frontend getManualUrl (https, tanpa subdomain, path /download/<id>)."""
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+        port = parts.port
+    except ValueError:
+        return False
+    if not (
+        parts.scheme == "https"
+        and host == "safefileku.com"
+        and (port is None or port == 443)
+        and parts.path.startswith("/download/")
+    ):
+        return False
+    rest = parts.path[len("/download/"):].rstrip("/")
+    return bool(rest) and all(c.isalnum() or c in "_-" for c in rest)
+
+
+def extract_destination(html, base=""):
+    """Cari link tujuan di halaman. Link safefileku diutamakan di mana pun posisinya; redirect lain
+    (window.location / meta refresh) hanya jadi cadangan, supaya redirect pertama yang tidak relevan
+    tidak menutupi link tujuan yang ada di halaman yang sama."""
+    candidates = []
+    for match in re.finditer(r'window\.location\.href\s*=\s*["\']([^"\']+)["\']', html):
+        candidates.append(match.group(1).replace("\\/", "/"))
+    for match in re.finditer(r'http-equiv=["\']refresh["\'][^>]+url=([^"\'>\s]+)', html, re.I):
+        candidates.append(match.group(1))
+    for candidate in candidates:
+        candidate = urljoin(base, candidate) if base else candidate
+        if is_target(candidate):
+            return candidate
+    match = TARGET_RE.search(html.replace("\\/", "/"))
     if match:
-        return match.group(1).replace("\\/", "/")
-    match = re.search(r'http-equiv=["\']refresh["\'][^>]+url=([^"\'>\s]+)', html, re.I)
-    if match:
-        return match.group(1)
-    if "safefileku.com/download/" in html:
-        match = re.search(r'https://safefileku\.com/download/[A-Za-z0-9]+', html)
-        if match:
-            return match.group(0)
-    return None
+        return match.group(0)
+    return candidates[0] if candidates else None
+
+
+def open_destination(session, url, max_hops=8):
+    """Buka halaman tujuan sambil mengikuti redirect satu per satu. Begitu URL tujuan (safefileku)
+    terlihat, berhenti tanpa mengunduh halamannya: crawler akan membukanya lagi, jadi di sini cukup
+    URL-nya. Return (url_akhir, response_atau_None, teks)."""
+    for _ in range(max_hops):
+        if is_target(url):
+            return url, None, ""
+        response = session.get(url, timeout=30, allow_redirects=False)
+        location = response.headers.get("Location") if response.is_redirect else None
+        if not location:
+            text = response.text
+            response.close()
+            return response.url, response, text
+        response.close()
+        url = urljoin(response.url, location)
+    response = session.get(url, timeout=30, allow_redirects=True)
+    text = response.text
+    response.close()
+    return response.url, response, text
+
+
+def _log_retry(attempt, reason, final=None):
+    fields = ["TIMING", "stage=resolver_retry", f"attempt={attempt}", f"reason={reason}"]
+    try:
+        host = urlsplit(final).hostname if final else None
+        if host:
+            fields.append(f"final_host={host}")
+        print(" ".join(fields), flush=True)
+    except Exception:
+        pass
 
 
 def resolve(slug):
@@ -87,14 +147,12 @@ def resolve(slug):
                     f"{TARGET_HOST}/redirect.php?alias={slug}&ray_id={match.group(1)}",
                     timeout=30,
                     allow_redirects=True,
-                    stream=True,
                 )
             else:
                 landed = session.get(
                     f"{TARGET_HOST}/redirect.php?alias={slug}",
                     timeout=30,
                     allow_redirects=True,
-                    stream=True,
                 )
         else:
             action = urljoin(page.url, form.get("action") or page.url)
@@ -108,7 +166,6 @@ def resolve(slug):
                 params=form_data,
                 timeout=30,
                 allow_redirects=True,
-                stream=True,
             )
         landed.close()
         referer = landed.url
@@ -140,7 +197,6 @@ def resolve(slug):
             headers=api_headers,
             json={"_a": 0, "captcha": "", "passcode": ""},
             timeout=30,
-            stream=True,
         )
         verification.close()
     except Exception as error:
@@ -178,9 +234,7 @@ def resolve(slug):
 
         ready_started = time.perf_counter()
         try:
-            ready = session.get(go_url, timeout=30, allow_redirects=True)
-            ready_text = ready.text
-            ready.close()
+            ready_url, ready, ready_text = open_destination(session, go_url)
         except Exception as error:
             _log_timing(
                 "destination_page",
@@ -190,11 +244,20 @@ def resolve(slug):
                 attempt=attempt,
             )
             raise
-        _log_timing("destination_page", ready_started, response=ready, attempt=attempt)
+        _log_timing(
+            "destination_page",
+            ready_started,
+            response=ready,
+            host=urlsplit(ready_url).hostname or "unknown",
+            attempt=attempt,
+        )
 
-        final = extract_destination(ready_text)
-        if final and "safefileku.com/download/" in final:
+        if is_target(ready_url):
+            return ready_url
+        final = extract_destination(ready_text, ready_url)
+        if final and is_target(final):
             return final
-        api_headers["Referer"] = ready.url
+        _log_retry(attempt, "not_safefileku" if final else "no_target", final)
+        api_headers["Referer"] = ready_url
 
     raise ValueError("destination not found after 3 tries")
