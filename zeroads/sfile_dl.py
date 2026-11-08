@@ -689,6 +689,13 @@ def find_candidates(text, page_url, gw=False):
     cands = [{"url": k[0], "data": k[1], "score": v[0], "why": v[1], "fallback": v[2]}
              for k, v in found.items()]
     cands.sort(key=lambda c: (c["fallback"], -c["score"]))
+    # DEBUG FIX-9: liat kenapa not_found padahal halaman dapet
+    try:
+        print(f"[DEBUG-SFILE] forms={len(forms) if 'forms' in locals() else '?'} cands={len(cands)}")
+        for u, s, kind in cands[:10]:
+            print(f"[DEBUG-SFILE] cand score={s} kind={kind} url={u[:150]}")
+    except Exception as e:
+        print(f"[DEBUG-SFILE] err {e}")
     return cands
 
 
