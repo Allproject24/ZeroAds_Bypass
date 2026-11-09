@@ -181,12 +181,17 @@ def resolve(slug):
     # Header persis seperti fetch di browser (Screenshot 2 & 7)
     api_headers = {
         "Content-Type": "application/json",
+        "X-XSRF-TOKEN": xsrf,  # Laravel sering membutuhkan ini untuk JSON
         "Origin": TARGET_HOST,
         "Referer": referer,
         "Accept": "*/*",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
+        # HEADER CLIENT HINTS (Wajib agar dideteksi sebagai Chrome asli)
+        "Sec-Ch-Ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?1",
+        "Sec-Ch-Ua-Platform": '"Android"',
     }
 
     # 1. Tembak /api/session
