@@ -194,6 +194,13 @@ def resolve(slug):
         "Sec-Ch-Ua-Platform": '"Android"',
     }
 
+    # --- DEBUG LOG MULAI ---
+    print(f"DEBUG_COOKIES: {session.cookies.get_dict()}", flush=True)
+    print(f"DEBUG_TOKEN_LEN: {len(xsrf)}", flush=True)
+    print(f"DEBUG_TOKEN_PREV: {xsrf[:15]}...", flush=True)
+    print(f"DEBUG_REFERER: {referer}", flush=True)
+    # --- DEBUG LOG SELESAI ---
+
     # 1. Tembak /api/session
     session_started = time.perf_counter()
     try:
@@ -208,6 +215,8 @@ def resolve(slug):
         _log_timing("api_session", session_started, host="app.khaddavi.net", error=error)
         raise
     _log_timing("api_session", session_started, response=res_session)
+    if res_session.status_code != 200:
+        print(f"DEBUG_RESP: {res_session.text[:300]}", flush=True)
 
     # 2. Tembak /api/go
     for attempt in range(1, 4):
