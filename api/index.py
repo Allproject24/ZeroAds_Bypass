@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PUBLIC = ROOT / "public"
 sys.path.insert(0, str(ROOT))
 
-from zeroads.downloader import DownloadFailure, UnsupportedUrl, resolve_download
+from zeroads.downloader import resolve_download
+from zeroads.errors import DownloadFailure, UnsupportedUrl
 
 app = Flask(__name__, static_folder=None)
 download_lock = Lock()

@@ -1071,3 +1071,39 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+import time
+from types import SimpleNamespace
+from urllib.parse import urlsplit
+from ..errors import DownloadFailure
+
+def process(start_url):
+    client = Client(capture_trace=False, timing=True)
+    client.gateway = host_kind(urlsplit(start_url).hostname) != "file"
+    args = SimpleNamespace(debug=False, wait=0.25, maxwait=15.0)
+    
+    crawler_started = time.perf_counter()
+    try:
+        found = resolve(client, start_url, None, args, {(start_url, None)})
+    except Exception as error:
+        print(f"TIMING stage=sfile_crawler outcome={type(error).__name__} elapsed_ms={(time.perf_counter() - crawler_started) * 1000:.1f} requests={client.requests}", flush=True)
+        raise
+        
+    print(f"TIMING stage=sfile_crawler outcome={'success' if found else 'not_found'} elapsed_ms={(time.perf_counter() - crawler_started) * 1000:.1f} requests={client.requests}", flush=True)
+    
+    if not found:
+        fallback = client.goal_page
+        message = (
+            "Tautan asli Safefileku ditemukan. Lanjutkan sendiri di browser."
+            if fallback else "Tautan tidak dapat diproses. Silakan coba lagi."
+        )
+        raise DownloadFailure(message, fallback)
+
+    response, _referer = found
+    final_url = response.geturl()
+    return response, {
+        "file_name": pick_filename(response, final_url),
+        "file_size": total_size(response),
+        "content_type": response.headers.get("Content-Type", "application/octet-stream")
+        .split(";", 1)[0].strip() or "application/octet-stream",
+    }

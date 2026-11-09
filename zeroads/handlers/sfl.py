@@ -222,3 +222,12 @@ def resolve(slug):
         api_headers["Referer"] = ready_url
 
     raise ValueError("destination not found after 3 tries")
+
+from ..errors import DownloadFailure
+
+def process(url):
+    slug = url.rstrip("/").split("/")[-1]
+    if not slug:
+        raise DownloadFailure("Tautan sfl.gl tidak memiliki kode.")
+    manual_url = resolve(slug)
+    raise DownloadFailure("Link asli ditemukan.", manual_url=manual_url)

@@ -35,3 +35,12 @@ def resolve(url: str):
         return None
     except requests.RequestException:
         return None
+
+from ..errors import DownloadFailure
+
+def process(url):
+    final_url = resolve(url)
+    if final_url:
+        raise DownloadFailure("Link asli ditemukan.", manual_url=final_url)
+    else:
+        raise DownloadFailure("Gagal memproses Linkvertise via Malz.", manual_url=None)
