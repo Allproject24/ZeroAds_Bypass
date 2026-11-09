@@ -5,6 +5,7 @@ from .handlers import sfl, linkvertise, sfile
 SUPPORTED_HOSTS = (
     "sfl.gl", "safelinku.com", "sfile.co", "sfile.mobi", "safefileku.com",
     "linkvertise.com", "link-target.net", "link-center.net", "link-hub.net", "direct-link.net",
+    "mediafire.com", "drive.google.com" # Tambahan direct link
 )
 
 def is_supported_url(value):
@@ -34,5 +35,8 @@ def resolve_download(value):
         return sfl.process(value)
     elif any(lv in host for lv in ("linkvertise.com", "link-target.net", "link-center.net", "link-hub.net", "direct-link.net")):
         return linkvertise.process(value)
+    elif any(h in host for h in ("mediafire.com", "drive.google.com")):
+        # Kalau user nempel link MediaFire, langsung kasih tombol Copy/Open
+        raise DownloadFailure("Link asli ditemukan.", manual_url=value)
     else:
         return sfile.process(value)
