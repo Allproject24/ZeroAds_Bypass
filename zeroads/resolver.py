@@ -7,14 +7,14 @@ import requests
 from bs4 import BeautifulSoup
 
 TARGET_HOST = "https://app.khaddavi.net"
+# Gunakan User-Agent persis seperti di DevTools
 USER_AGENT = (
-    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36"
 )
 WORKER_URL = "https://sfl-proxy.allstorevpn.workers.dev"
 
 def proxify(url):
-    """Bungkus URL agar lewat Cloudflare Worker"""
     return f"{WORKER_URL}?url={quote(url, safe='')}"
 
 def _log_timing(stage, started, response=None, host=None, error=None, attempt=None):
@@ -37,9 +37,19 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
     except Exception:
         pass
 
-def get_xsrf(session, domain):
+def extract_csrf_token(html, session):
+    """Ekstrak token dari HTML (meta tag) atau Cookie cadangan"""
+    soup = BeautifulSoup(html, "html.parser")
+    meta = soup.find("meta", attrs={"name": "csrf-token"})
+    if meta and meta.get("content"):
+        return meta.get("content")
+    
+    inp = soup.find("input", attrs={"name": "_token"})
+    if inp and inp.get("value"):
+        return inp.get("value")
+
     for cookie in session.cookies:
-        if cookie.name == "XSRF-TOKEN":
+        if cookie.name in ("TOKEN", "XSRF-TOKEN"):
             return unquote(cookie.value)
     return ""
 
@@ -81,21 +91,16 @@ def open_destination(session, url, max_hops=8):
     for _ in range(max_hops):
         if is_target(url):
             return url, None, ""
-        
         response = session.get(proxify(url), timeout=30, allow_redirects=False)
-        
         real_url = response.headers.get("X-Real-Url", url)
         real_redirect = response.headers.get("X-Real-Redirect")
-        
         if real_redirect:
             response.close()
             url = real_redirect
             continue
-            
         text = response.text
         response.close()
         return real_url, response, text
-        
     response = session.get(proxify(url), timeout=30, allow_redirects=True)
     text = response.text
     response.close()
@@ -113,13 +118,11 @@ def _log_retry(attempt, reason, final=None):
 
 def resolve(slug):
     session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-    )
+    session.headers.update({
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+    })
 
     page_started = time.perf_counter()
     try:
@@ -141,30 +144,27 @@ def resolve(slug):
             if match:
                 landed = session.get(
                     proxify(f"{TARGET_HOST}/redirect.php?alias={slug}&ray_id={match.group(1)}"),
-                    timeout=30,
-                    allow_redirects=True,
+                    timeout=30, allow_redirects=True,
                 )
             else:
                 landed = session.get(
                     proxify(f"{TARGET_HOST}/redirect.php?alias={slug}"),
-                    timeout=30,
-                    allow_redirects=True,
+                    timeout=30, allow_redirects=True,
                 )
         else:
             action = urljoin(page.url, form.get("action") or page.url)
             form_data = {
                 field.get("name"): field.get("value", "")
-                for field in form.find_all("input")
-                if field.get("name")
+                for field in form.find_all("input") if field.get("name")
             }
             landed = session.get(
-                proxify(action),
-                params=form_data,
-                timeout=30,
-                allow_redirects=True,
+                proxify(action), params=form_data,
+                timeout=30, allow_redirects=True,
             )
-        landed.close()
+        
         referer = landed.headers.get("X-Real-Url", landed.url)
+        landed_text = landed.text
+        landed.close()
     except Exception as error:
         _log_timing("landing", landing_started, host="app.khaddavi.net", error=error)
         raise
@@ -173,32 +173,38 @@ def resolve(slug):
     if "khaddavi" not in referer:
         raise ValueError(f"did not land on {TARGET_HOST}, got {referer}")
 
-    xsrf = get_xsrf(session, "khaddavi")
+    # Ekstrak token dari HTML halaman landing
+    xsrf = extract_csrf_token(landed_text, session)
     if not xsrf:
-        raise ValueError("no XSRF-TOKEN for app.khaddavi.net")
+        raise ValueError("no CSRF token found in HTML or cookies")
 
+    # Header persis seperti fetch di browser (Screenshot 2 & 7)
     api_headers = {
         "Content-Type": "application/json",
         "Origin": TARGET_HOST,
         "Referer": referer,
         "Accept": "*/*",
-        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
     }
 
-    verification_started = time.perf_counter()
+    # 1. Tembak /api/session
+    session_started = time.perf_counter()
     try:
-        verification = session.post(
+        res_session = session.post(
             proxify(f"{TARGET_HOST}/api/session"),
             headers=api_headers,
             json={"_token": xsrf},
             timeout=30,
         )
-        verification.close()
+        res_session.close()
     except Exception as error:
-        _log_timing("verify", verification_started, host="app.khaddavi.net", error=error)
+        _log_timing("api_session", session_started, host="app.khaddavi.net", error=error)
         raise
-    _log_timing("verify", verification_started, response=verification)
+    _log_timing("api_session", session_started, response=res_session)
 
+    # 2. Tembak /api/go
     for attempt in range(1, 4):
         key = random.randint(0, 999)
         size = f"{3840 + key * 2}.{2160 + key * 2}"
@@ -213,13 +219,7 @@ def resolve(slug):
             go = go_response.json()
             go_response.close()
         except Exception as error:
-            _log_timing(
-                "api_go",
-                go_started,
-                host="app.khaddavi.net",
-                error=error,
-                attempt=attempt,
-            )
+            _log_timing("api_go", go_started, host="app.khaddavi.net", error=error, attempt=attempt)
             raise
         _log_timing("api_go", go_started, response=go_response, attempt=attempt)
 
@@ -231,27 +231,17 @@ def resolve(slug):
         try:
             ready_url, ready, ready_text = open_destination(session, go_url)
         except Exception as error:
-            _log_timing(
-                "destination_page",
-                ready_started,
-                host=urlsplit(go_url).hostname or "unknown",
-                error=error,
-                attempt=attempt,
-            )
+            _log_timing("destination_page", ready_started, host=urlsplit(go_url).hostname or "unknown", error=error, attempt=attempt)
             raise
-        _log_timing(
-            "destination_page",
-            ready_started,
-            response=ready,
-            host=urlsplit(ready_url).hostname or "unknown",
-            attempt=attempt,
-        )
+        
+        _log_timing("destination_page", ready_started, response=ready, host=urlsplit(ready_url).hostname or "unknown", attempt=attempt)
 
         if is_target(ready_url):
             return ready_url
         final = extract_destination(ready_text, ready_url)
         if final and is_target(final):
             return final
+        
         _log_retry(attempt, "not_safefileku" if final else "no_target", final)
         api_headers["Referer"] = ready_url
 
