@@ -7,10 +7,9 @@ import requests
 from bs4 import BeautifulSoup
 
 TARGET_HOST = "https://app.khaddavi.net"
-# Gunakan User-Agent persis seperti di DevTools
 USER_AGENT = (
-    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
 )
 WORKER_URL = "https://sfl-proxy.allstorevpn.workers.dev"
 
@@ -37,19 +36,13 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
     except Exception:
         pass
 
-def extract_csrf_token(html, session):
-    """Ekstrak token dari HTML (meta tag) atau Cookie cadangan"""
-    soup = BeautifulSoup(html, "html.parser")
-    meta = soup.find("meta", attrs={"name": "csrf-token"})
-    if meta and meta.get("content"):
-        return meta.get("content")
-    
-    inp = soup.find("input", attrs={"name": "_token"})
-    if inp and inp.get("value"):
-        return inp.get("value")
-
+def get_xsrf(session, domain):
     for cookie in session.cookies:
-        if cookie.name in ("TOKEN", "XSRF-TOKEN"):
+        if cookie.name == "XSRF-TOKEN" and domain in cookie.domain:
+            return unquote(cookie.value)
+    # Fallback jika domain tidak cocok karena proxy
+    for cookie in session.cookies:
+        if cookie.name == "XSRF-TOKEN":
             return unquote(cookie.value)
     return ""
 
@@ -120,8 +113,8 @@ def resolve(slug):
     session = requests.Session()
     session.headers.update({
         "User-Agent": USER_AGENT,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
     })
 
     page_started = time.perf_counter()
@@ -163,7 +156,6 @@ def resolve(slug):
             )
         
         referer = landed.headers.get("X-Real-Url", landed.url)
-        landed_text = landed.text
         landed.close()
     except Exception as error:
         _log_timing("landing", landing_started, host="app.khaddavi.net", error=error)
@@ -173,52 +165,35 @@ def resolve(slug):
     if "khaddavi" not in referer:
         raise ValueError(f"did not land on {TARGET_HOST}, got {referer}")
 
-    # Ekstrak token dari HTML halaman landing
-    xsrf = extract_csrf_token(landed_text, session)
+    xsrf = get_xsrf(session, "khaddavi")
     if not xsrf:
-        raise ValueError("no CSRF token found in HTML or cookies")
+        raise ValueError("no XSRF-TOKEN for app.khaddavi.net")
 
-    # Header persis seperti fetch di browser (Screenshot 2 & 7)
     api_headers = {
         "Content-Type": "application/json",
-        "X-XSRF-TOKEN": xsrf,  # Laravel sering membutuhkan ini untuk JSON
+        "X-XSRF-TOKEN": xsrf,
         "Origin": TARGET_HOST,
         "Referer": referer,
         "Accept": "*/*",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-        # HEADER CLIENT HINTS (Wajib agar dideteksi sebagai Chrome asli)
-        "Sec-Ch-Ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
-        "Sec-Ch-Ua-Mobile": "?1",
-        "Sec-Ch-Ua-Platform": '"Android"',
+        "X-Requested-With": "XMLHttpRequest",
     }
 
-    # --- DEBUG LOG MULAI ---
-    print(f"DEBUG_COOKIES: {session.cookies.get_dict()}", flush=True)
-    print(f"DEBUG_TOKEN_LEN: {len(xsrf)}", flush=True)
-    print(f"DEBUG_TOKEN_PREV: {xsrf[:15]}...", flush=True)
-    print(f"DEBUG_REFERER: {referer}", flush=True)
-    # --- DEBUG LOG SELESAI ---
-
-    # 1. Tembak /api/session
-    session_started = time.perf_counter()
+    # 1. Endpoint ORI: /api/verify
+    verification_started = time.perf_counter()
     try:
-        res_session = session.post(
-            proxify(f"{TARGET_HOST}/api/session"),
+        verification = session.post(
+            proxify(f"{TARGET_HOST}/api/verify"),
             headers=api_headers,
-            json={"_token": xsrf},
+            json={"_a": 0, "captcha": "", "passcode": ""},
             timeout=30,
         )
-        res_session.close()
+        verification.close()
     except Exception as error:
-        _log_timing("api_session", session_started, host="app.khaddavi.net", error=error)
+        _log_timing("verify", verification_started, host="app.khaddavi.net", error=error)
         raise
-    _log_timing("api_session", session_started, response=res_session)
-    if res_session.status_code != 200:
-        print(f"DEBUG_RESP: {res_session.text[:300]}", flush=True)
+    _log_timing("verify", verification_started, response=verification)
 
-    # 2. Tembak /api/go
+    # 2. Endpoint ORI: /api/go
     for attempt in range(1, 4):
         key = random.randint(0, 999)
         size = f"{3840 + key * 2}.{2160 + key * 2}"
@@ -227,7 +202,7 @@ def resolve(slug):
             go_response = session.post(
                 proxify(f"{TARGET_HOST}/api/go"),
                 headers=api_headers,
-                json={"key": key, "size": size, "ado": None},
+                json={"key": key, "size": size},
                 timeout=30,
             )
             go = go_response.json()
@@ -247,7 +222,6 @@ def resolve(slug):
         except Exception as error:
             _log_timing("destination_page", ready_started, host=urlsplit(go_url).hostname or "unknown", error=error, attempt=attempt)
             raise
-        
         _log_timing("destination_page", ready_started, response=ready, host=urlsplit(ready_url).hostname or "unknown", attempt=attempt)
 
         if is_target(ready_url):
