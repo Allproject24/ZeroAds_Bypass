@@ -46,11 +46,16 @@
     if (!["blocked", "success"].includes(currentJob?.status) || !currentJob.manualUrl) return null;
     try {
       const url = new URL(currentJob.manualUrl);
-      if (
-        url.protocol !== "https:" ||
-        url.origin !== "https://safefileku.com" ||
-        !/^\/download\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)
-      ) {
+      const allowedHosts = [
+        "safefileku.com", 
+        "mediafire.com", 
+        "drive.google.com", 
+        "sfile.co"
+      ];
+      const isAllowed = allowedHosts.some(host => 
+        url.hostname === host || url.hostname.endsWith("." + host)
+      );
+      if (url.protocol !== "https:" || !isAllowed) {
         return null;
       }
       return url.href;
