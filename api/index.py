@@ -63,12 +63,12 @@ def downloads():
         _log_timing(
             "api_resolve",
             resolution_started,
-            "blocked" if error.manual_url else "failed",
+            "success" if error.manual_url else "failed",
         )
         download_lock.release()
         return (
             jsonify(
-                status="blocked" if error.manual_url else "failed",
+                status="success" if error.manual_url else "failed",
                 error=str(error),
                 manualUrl=error.manual_url,
             ),

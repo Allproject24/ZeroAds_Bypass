@@ -43,7 +43,7 @@
   }
 
   function getManualUrl(currentJob) {
-    if (currentJob?.status !== "blocked" || !currentJob.manualUrl) return null;
+    if (currentJob?.status !== "success" || !currentJob.manualUrl) return null;
     try {
       const url = new URL(currentJob.manualUrl);
       if (
@@ -196,7 +196,7 @@
           throw new Error(body?.error || "Permintaan tidak dapat diproses. Silakan coba lagi.");
         }
         job = {
-          status: body.status || (body.manualUrl ? "blocked" : "failed"),
+          status: body.status || (body.manualUrl ? "success" : "failed"),
           manualUrl: body.manualUrl || null,
           error: body.error || null,
         };
