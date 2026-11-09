@@ -2,7 +2,7 @@ import time
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
-from . import sfile_dl
+from . import sfile_dl, linkvertise
 from .resolver import resolve as resolve_sfl
 
 SUPPORTED_HOSTS = (
@@ -11,6 +11,11 @@ SUPPORTED_HOSTS = (
     "sfile.co",
     "sfile.mobi",
     "safefileku.com",
+    "linkvertise.com",
+    "link-target.net",
+    "link-center.net",
+    "link-hub.net",
+    "direct-link.net",
 )
 
 
@@ -76,6 +81,24 @@ def resolve_download(value):
         _log_timing("sfl_resolver", resolver_started, "success")
         # sfl.gl = bypass-only: cukup kembalikan link asli, jangan lanjut crawler / unduh berkas
         raise DownloadFailure("Link asli ditemukan.", manual_url=manual_url)
+
+    # --- FITUR BARU: LINKVERTISE ---
+    host = (parsed.hostname or "").lower()
+    if any(lv in host for lv in ("linkvertise.com", "link-target.net", "link-center.net", "link-hub.net", "direct-link.net")):
+        lv_started = time.perf_counter()
+        try:
+            final_url = linkvertise.resolve(value)
+            if final_url:
+                _log_timing("linkvertise", lv_started, "success")
+                raise DownloadFailure("Link asli ditemukan.", manual_url=final_url)
+            else:
+                raise DownloadFailure("Gagal memproses Linkvertise.", manual_url=None)
+        except DownloadFailure:
+            raise
+        except Exception as error:
+            _log_timing("linkvertise", lv_started, type(error).__name__)
+            raise DownloadFailure(f"Error Linkvertise: {str(error)}")
+    # --------------------------------
 
     client = sfile_dl.Client(capture_trace=False, timing=True)
     client.gateway = sfile_dl.host_kind(urlsplit(start_url).hostname) != "file"
