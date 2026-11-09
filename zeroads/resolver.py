@@ -179,7 +179,6 @@ def resolve(slug):
 
     api_headers = {
         "Content-Type": "application/json",
-        "X-XSRF-TOKEN": xsrf,
         "Origin": TARGET_HOST,
         "Referer": referer,
         "Accept": "*/*",
@@ -189,9 +188,9 @@ def resolve(slug):
     verification_started = time.perf_counter()
     try:
         verification = session.post(
-            proxify(f"{TARGET_HOST}/api/verify"),
+            proxify(f"{TARGET_HOST}/api/session"),
             headers=api_headers,
-            json={"_a": 0, "captcha": "", "passcode": ""},
+            json={"_token": xsrf},
             timeout=30,
         )
         verification.close()
