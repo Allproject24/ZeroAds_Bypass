@@ -38,11 +38,10 @@ def _log_timing(stage, started, response=None, host=None, error=None, attempt=No
         pass
 
 def get_xsrf(session, domain):
-    token = ""
     for cookie in session.cookies:
         if cookie.name == "XSRF-TOKEN":
-            token = cookie.value # Jangan di-unquote, Laravel butuh format asli
-    return token
+            return unquote(cookie.value)
+    return ""
 
 TARGET_RE = re.compile(r"https://safefileku\.com/download/[A-Za-z0-9_-]+")
 
@@ -192,7 +191,7 @@ def resolve(slug):
         verification = session.post(
             proxify(f"{TARGET_HOST}/api/verify"),
             headers=api_headers,
-            json={"_a": 0, "captcha": "", "passcode": "", "_token": xsrf},
+            json={"_a": 0, "captcha": "", "passcode": ""},
             timeout=30,
         )
         verification.close()
@@ -209,7 +208,7 @@ def resolve(slug):
             go_response = session.post(
                 proxify(f"{TARGET_HOST}/api/go"),
                 headers=api_headers,
-                json={"key": key, "size": size, "_token": xsrf},
+                json={"key": key, "size": size, "ado": None},
                 timeout=30,
             )
             go = go_response.json()
