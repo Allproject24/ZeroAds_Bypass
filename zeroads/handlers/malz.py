@@ -8,7 +8,6 @@ MALZ_URL = "https://malz-official.com/slf/"
 RE_RESULT = re.compile(r'<div[^>]*id="resultUrl"[^>]*>(.*?)</div>', re.DOTALL)
 RE_ERROR = re.compile(r'class="error"[^>]*>(.*?)</div>', re.DOTALL)
 
-# Bikin adapter khusus biar maksa pakai TLS 1.2
 class TLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
         context = ssl.create_default_context()
@@ -28,7 +27,6 @@ def resolve(url: str):
     canonical_url = to_canonical(url)
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        # Pake UA Windows Chrome biar mirip browser asli
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": MALZ_URL
     }
@@ -57,4 +55,4 @@ def process(url):
     if final_url:
         raise DownloadFailure("Link asli ditemukan.", manual_url=final_url)
     else:
-        raise DownloadFailure("Gagal memproses Linkvertise via Malz.", manual_url=None)
+        raise DownloadFailure("Gagal memproses link via Malz.", manual_url=None)
