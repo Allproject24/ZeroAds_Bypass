@@ -5,7 +5,7 @@ from .handlers import sfl, malz, sfile, ouo
 SUPPORTED_HOSTS = (
     "sfl.gl", "safelinku.com", "sfile.co", "sfile.mobi", "safefileku.com",
     "linkvertise.com", "link-target.net", "link-center.net", "link-hub.net", "direct-link.net",
-    "loot-link.com", "lootlabs.gg", "lootdest.com", "loot-labs.com", "work.ink", "yorurl.com",
+    "loot-link.com", "lootlabs.gg", "lootdest.com", "loot-labs.com", "sub2unlock.io", "sub2unlock.net", "sub4unlock.com", "sub4unlock.pro", "work.ink", "yorurl.com",
     "mediafire.com", "drive.google.com", "ouo.io", "ouo.press"
 )
 
@@ -31,7 +31,7 @@ def resolve_download(value):
     # ROUTER
     if host.endswith("sfl.gl"):
         return sfl.process(value)
-    elif any(lv in host for lv in ("linkvertise.com", "link-target.net", "link-center.net", "link-hub.net", "direct-link.net", "loot-link.com", "lootlabs.gg", "lootdest.com", "loot-labs.com", "work.ink", "yorurl.com")):
+    elif any(lv in host for lv in ("linkvertise.com", "link-target.net", "link-center.net", "link-hub.net", "direct-link.net", "loot-link.com", "lootlabs.gg", "lootdest.com", "loot-labs.com", "sub2unlock.io", "sub2unlock.net", "sub4unlock.com", "sub4unlock.pro", "work.ink", "yorurl.com")):
         return malz.process(value)
     elif any(o in host for o in ("ouo.io", "ouo.press")):
         return ouo.process(value)
