@@ -43,6 +43,15 @@ def health():
 @app.post("/api/index.py")
 @app.post("/index.py")
 def downloads():
+    # SATPAM 1: Cek Header Rahasia
+    if request.headers.get("X-ZeroAds-Client") != "v1":
+        return jsonify(error="Akses ditolak. Gunakan aplikasi resmi ZeroAds."), 403
+
+    # SATPAM 2: Cek Origin (Hanya izinkan dari domain sendiri atau localhost)
+    origin = request.headers.get("Origin", "")
+    if origin and "zero-ads-bypass.vercel.app" not in origin and "localhost" not in origin:
+        return jsonify(error="Akses lintas domain dilarang."), 403
+
     body = request.get_json(silent=True) or {}
     url = body.get("url", "")
     if not isinstance(url, str) or not url.strip():

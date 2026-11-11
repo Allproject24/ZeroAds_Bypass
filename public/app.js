@@ -180,7 +180,10 @@
     try {
       const response = await fetch("/api/downloads", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-ZeroAds-Client": "v1"
+        },
         body: JSON.stringify({ url }),
         cache: "no-store",
       });
